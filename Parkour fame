@@ -1,0 +1,180 @@
+import pygame
+import sys
+
+# Initialize Pygame
+pygame.init()
+
+# Constants
+SCREEN_WIDTH = 1200  # Genişletilmiş ekran genişliği
+SCREEN_HEIGHT = 600
+PLAYER_WIDTH = 50
+PLAYER_HEIGHT = 60
+GRAVITY = 1
+JUMP_STRENGTH = 15
+SPEED = 5
+
+# Colors
+WHITE = (255, 255, 255)
+BLACK = (0, 0, 0)
+GREEN = (0, 255, 0)
+RED = (255, 0, 0)
+BLUE = (0, 0, 255)
+
+# Screen
+screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
+pygame.display.set_caption("Advanced Platformer Game")
+
+# Player
+start_x = 100
+start_y = 500
+player = pygame.Rect(start_x, start_y, PLAYER_WIDTH, PLAYER_HEIGHT)
+player_velocity_y = 0
+is_jumping = False
+
+# Platforms (sağa doğru genişletilmiş)
+platforms = [
+    pygame.Rect(100, 500, 200, 20),
+    pygame.Rect(400, 400, 300, 20),
+    pygame.Rect(800, 350, 200, 20),
+    pygame.Rect(1100, 250, 300, 20),
+    pygame.Rect(1500, 500, 200, 20),  # Yeni platform eklenmiştir
+]
+
+# Game over screen
+game_over_font = pygame.font.Font(None, 36)
+game_over_text = game_over_font.render('Game Over!', True, RED)
+game_over_rect = game_over_text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 + 30))
+
+retry_button = pygame.Rect(500, 400, 200, 50)
+retry_text = game_over_font.render('Retry', True, WHITE)
+retry_rect = retry_text.get_rect(center=retry_button.center)
+
+quit_button = pygame.Rect(500, 470, 200, 50)
+quit_text = game_over_font.render('Quit', True, WHITE)
+quit_rect = quit_text.get_rect(center=quit_button.center)
+
+# Joystick
+joystick_center = (100, SCREEN_HEIGHT - 100)
+joystick_radius = 50
+joystick_knob = pygame.Rect(0, 0, 30, 30)
+joystick_knob.center = joystick_center
+joystick_active = False
+
+def joystick_direction():
+    dx = joystick_knob.centerx - joystick_center[0]
+    dy = joystick_knob.centery - joystick_center[1]
+    return dx / joystick_radius, dy / joystick_radius
+
+# Game loop
+clock = pygame.time.Clock()
+running = True
+game_over = False
+game_won = False
+
+while running:
+    while game_over or game_won:
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                running = False
+                game_over = False
+                game_won = False
+            elif event.type == pygame.MOUSEBUTTONDOWN:
+                if retry_button.collidepoint(event.pos):
+                    player.x = start_x
+                    player.y = start_y
+                    player_velocity_y = 0
+                    is_jumping = False
+                    game_over = False
+                    game_won = False
+                elif quit_button.collidepoint(event.pos):
+                    running = False
+                    game_over = False
+                    game_won = False
+
+        screen.fill(WHITE)
+        pygame.draw.rect(screen, BLACK, game_over_rect)
+        pygame.draw.rect(screen, RED, retry_button)
+        pygame.draw.rect(screen, RED, quit_button)
+        if game_over:
+            screen.blit(game_over_text, game_over_rect)
+            screen.blit(retry_text, retry_rect)
+            screen.blit(quit_text, quit_rect)
+        elif game_won:
+            win_text = game_over_font.render('Congratulations, You Won!', True, GREEN)
+            win_rect = win_text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 + 30))
+            screen.blit(win_text, win_rect)
+            next_level_button = pygame.Rect(500, 400, 200, 50)
+            next_level_text = game_over_font.render('Next Level', True, WHITE)
+            next_level_rect = next_level_text.get_rect(center=next_level_button.center)
+            pygame.draw.rect(screen, GREEN, next_level_button)
+            screen.blit(next_level_text, next_level_rect)
+            screen.blit(quit_text, quit_rect)
+        pygame.display.flip()
+
+    for event in pygame.event.get():
+        if event.type == pygame.QUIT:
+            running = False
+        elif event.type == pygame.MOUSEBUTTONDOWN:
+            if joystick_knob.collidepoint(event.pos):
+                joystick_active = True
+        elif event.type == pygame.MOUSEBUTTONUP:
+            joystick_active = False
+            joystick_knob.center = joystick_center
+        elif event.type == pygame.MOUSEMOTION:
+            if joystick_active:
+                dx, dy = event.pos[0] - joystick_center[0], event.pos[1] - joystick_center[1]
+                distance = (dx**2 + dy**2) ** 0.5
+                if distance < joystick_radius:
+                    joystick_knob.center = event.pos
+                else:
+                    angle = pygame.math.Vector2(dx, dy).angle_to(pygame.math.Vector2(1, 0))
+                    joystick_knob.center = (joystick_center[0] + joystick_radius * pygame.math.Vector2(1, 0).rotate(-angle).x,
+                                            joystick_center[1] + joystick_radius * pygame.math.Vector2(1, 0).rotate(-angle).y)
+
+    # Joystick input
+    direction = joystick_direction()
+    if direction[0] < -0.5:
+        player.x -= SPEED
+    elif direction[0] > 0.5:
+        player.x += SPEED
+
+    # Jumping
+    if direction[1] < -0.5 and not is_jumping:
+        player_velocity_y = -JUMP_STRENGTH
+        is_jumping = True
+
+    # Gravity
+    player_velocity_y += GRAVITY
+    player.y += player_velocity_y
+
+    # Collision with platforms
+    for platform in platforms:
+        if player.colliderect(platform) and player_velocity_y > 0:
+            player.y = platform.y - PLAYER_HEIGHT
+            player_velocity_y = 0
+            is_jumping = False
+
+    # Check if player reaches the end platform (en sağdaki platform)
+    end_platform = platforms[-1]
+    if player.colliderect(end_platform):
+        game_won = True
+
+    # Check if player falls off the screen
+    if player.top > SCREEN_HEIGHT:
+        game_over = True
+
+    # Drawing
+    screen.fill(WHITE)
+    pygame.draw.rect(screen, BLACK, player)
+    for platform in platforms:
+        pygame.draw.rect(screen, GREEN, platform)
+
+    # Draw joystick
+    pygame.draw.circle(screen, RED, joystick_center, joystick_radius, 2)
+    pygame.draw.ellipse(screen, BLUE, joystick_knob)
+
+    pygame.display.flip()
+    clock.tick(60)
+
+pygame.quit()
+sys.exit()
